@@ -1,0 +1,1 @@
+export { generateSingleDialogHook } from './generateSingleDialog';
