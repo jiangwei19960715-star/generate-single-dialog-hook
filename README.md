@@ -20,8 +20,7 @@ npm install generate-single-dialog-hook
 
 ### Peer Dependencies
 
-- `react` >= 19.2.0
-- `react-dom` >= 19.2.0
+- `react` >= 16
 
 ## 快速开始
 
