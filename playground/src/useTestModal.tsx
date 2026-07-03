@@ -1,20 +1,21 @@
 import { useContext } from 'react';
 import { generateSingleDialogHook } from '../../src';
 import { Form, Input, InputNumber, Modal } from 'antd';
-import { AppContext } from './AppContext';
+import { Content } from './Content';
 
 const name = 'TestModal' as const;
 
 interface Payload {
   visible: boolean;
   success: (formValues: Record<string, any>) => void;
+  data: any;
 }
 
 export const useTestModal = generateSingleDialogHook<typeof name, Payload>(
   name,
   ({ payload, setPayload }) => {
-    const { visible } = payload;
-    const { name, age } = useContext(AppContext);
+    const { visible, data } = payload;
+    const { name, age } = useContext(Content);
     const [form] = Form.useForm();
 
     const handleOk = async () => {
@@ -29,7 +30,7 @@ export const useTestModal = generateSingleDialogHook<typeof name, Payload>(
 
     return (
       <Modal title="Test Modal" open={visible} width={500} onOk={handleOk} onCancel={handleCancel}>
-        <Form form={form} initialValues={{ name, age }} labelCol={{ span: 4 }}>
+        <Form form={form} initialValues={{ name, age, ...data }} labelCol={{ span: 4 }}>
           <Form.Item label="Name" name="name" rules={[{ required: true }]}>
             <Input />
           </Form.Item>

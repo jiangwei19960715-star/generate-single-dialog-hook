@@ -6,7 +6,7 @@ interface AppContextValue {
   age?: number;
 }
 
-export const AppContext = createContext<AppContextValue>({
+export const Content = createContext<AppContextValue>({
   userId: '518715',
   name: 'jiangwei',
   age: 30,

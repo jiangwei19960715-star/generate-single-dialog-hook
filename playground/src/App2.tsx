@@ -1,13 +1,12 @@
 import { Button } from 'antd';
 import { useTestModal } from './useTestModal';
-import { App2 } from './App2';
 
-export function App() {
+export function App2() {
   const { showTestModal, TestModal } = useTestModal(true);
 
   const handleClick = () => {
     showTestModal({
-      data: { name: '1' },
+      data: { name: '2' },
       success: async (values) => {
         console.log(values);
       },
@@ -19,7 +18,6 @@ export function App() {
       <Button onClick={handleClick}>show Test Modal</Button>
       {TestModal}
       {JSON.stringify(TestModal !== null)}
-      <App2 />
     </>
   );
 }
