@@ -30,38 +30,23 @@ npm install generate-single-dialog-hook
 ### 1. 定义 Context 与对话框 Hook
 
 ```tsx
-import { createContext, useContext } from 'react';
 import { generateSingleDialogHook } from 'generate-single-dialog-hook';
 import { Modal, Form, Input } from 'antd';
-
-// 定义 Context，用于父组件向 Dialog 传递数据
-interface UserContextType {
-  userId: string;
-  username: string;
-}
-
-const UserContext = createContext<UserContextType>({
-  userId: '',
-  username: '',
-});
 
 // 定义 Payload
 interface Payload {
   visible: boolean;
-  onSuccess?: (values: Record<string, any>) => void;
+  onSuccess?: () => void;
 }
 
 // 定义对话框 Hook
-export const useEditUserModal = generateSingleDialogHook<'EditUserModal', Payload>(
+export const useModal = generateSingleDialogHook<'useModal', Payload>(
   'EditUserModal',
   ({ payload, setPayload }) => {
-    // ✅ 在 renderDialog 内部通过 useContext 读取父组件 Context 数据
-    const { userId, username } = useContext(UserContext);
-    const [form] = Form.useForm();
+    // 因为dialog是挂载在组件下面的，所有可以调用Context获取数据
 
     const handleOk = async () => {
-      const values = await form.validateFields();
-      payload.onSuccess?.(values);
+      payload.onSuccess?.();
       setPayload({ visible: false });
     };
 
@@ -72,29 +57,20 @@ export const useEditUserModal = generateSingleDialogHook<'EditUserModal', Payloa
         onOk={handleOk}
         onCancel={() => setPayload({ visible: false })}
       >
-        <Form form={form}>
-          <Form.Item label="用户 ID">
-            <Input disabled value={userId} />
-          </Form.Item>
-          <Form.Item label="姓名" name="name" rules={[{ required: true }]}>
-            <Input />
-          </Form.Item>
-        </Form>
+        modal content
       </Modal>
     );
   },
 );
 ```
 
-### 2. 父组件挂载 Dialog 并提供 Context
+### 2. 父组件挂载 Dialog
 
 ```tsx
 function ParentPage() {
-  // mount=true：父组件作为 Dialog 的宿主，负责渲染
   const { showEditUserModal, EditUserModal } = useEditUserModal(true);
 
   return (
-    // 父组件通过 Context.Provider 注入数据，Dialog 渲染时自动消费
     <UserContext.Provider value={{ userId: '123', username: 'Alice' }}>
       <ChildComponent />
       {EditUserModal}
@@ -108,116 +84,23 @@ function ParentPage() {
 ```tsx
 function ChildComponent() {
   // mount=false：子组件不渲染 Dialog，仅获取 show / hide 方法
-  const { showEditUserModal } = useEditUserModal(false);
+  const { showEditUserModal } = useEditUserModal();
 
   return (
     <button
       onClick={() =>
         showEditUserModal({
-          onSuccess: (values) => {
-            console.log('表单数据:', values);
+          onSuccess: () => {
+            // 点击弹框的确定按钮触发
           },
         })
       }
     >
-      打开编辑对话框
+      show dialog
     </button>
   );
 }
 ```
-
-### 4. 其他页面也可触发（无 Context 时使用默认值）
-
-```tsx
-function AnotherPage() {
-  const { showEditUserModal } = useEditUserModal(false);
-
-  return (
-    <button onClick={() => showEditUserModal({ onSuccess: console.log })}>
-      从其他页面打开
-    </button>
-  );
-}
-```
-
-## API
-
-### `generateSingleDialogHook(name, renderDialog)`
-
-创建一个单例对话框 Hook。
-
-**参数：**
-
-| 参数 | 类型 | 说明 |
-| --- | --- | --- |
-| `name` | `string`（必须以字面量类型传入） | 对话框名称，用于生成对应的 `show*` / `hide*` 方法和 ReactNode key |
-| `renderDialog` | `(params: IRenderDialog<P>) => ReactNode` | 对话框渲染函数，接收 `payload` 和 `setPayload` |
-
-**返回值：**
-
-一个 Hook 函数 `(mount?: boolean) => DialogHookResult`，调用后返回：
-
-| 属性 | 类型 | 说明 |
-| --- | --- | --- |
-| `[name]` | `ReactNode` | 对话框的 React 节点，`mount=true` 时渲染内容，否则为 `null` |
-| `show${Name}` | `(payload: Omit<P, 'visible'>) => void` | 显示对话框，传入除 `visible` 外的 payload 字段 |
-| `hide${Name}` | `() => void` | 隐藏对话框 |
-
-**泛型参数：**
-
-| 泛型 | 约束 | 说明 |
-| --- | --- | --- |
-| `N` | `string` | 对话框名称的字面量类型 |
-| `P` | `extends IPayloadBase` | 自定义 Payload 类型，必须包含 `visible: boolean` |
-
-### `IRenderDialog<P>`
-
-```ts
-interface IRenderDialog<P extends IPayloadBase> {
-  payload: P;                           // 当前 payload（包含 visible）
-  setPayload: (payload: Partial<P>) => void;  // 更新 payload（需手动展开当前值）
-}
-```
-
-### `IPayloadBase`
-
-```ts
-interface IPayloadBase {
-  visible: boolean;
-  [key: string]: any;  // 允许任意扩展字段
-}
-```
-
-## 工作原理
-
-1. **模块级闭包变量**：`showDialog`、`hideDialog` 在模块作用域定义，所有调用同一 Hook 的组件实例共享这两个变量的引用。
-
-2. **mount=true**：传入 `mount=true` 的组件实例会将模块级的 `showDialog` / `hideDialog` 重新绑定到自己的 `setPayload` 上，并负责渲染对话框内容。每个 `mount=true` 实例的 `showXxx` / `hideXxx` 始终指向自己内部的 `setPayload`，各自独立控制。
-
-3. **mount=false**：不渲染对话框（`[name]` 返回 `null`），但会拿到当前模块级闭包中的 `showXxx` / `hideXxx`（即**最后一个 `mount=true` 实例**绑定的方法），从而可以触发对话框的显示和隐藏。
-
-4. **模块级变量是值捕获**：Hook 返回时，`showXxx` 和 `hideXxx` 获取的是模块级变量**当前指向的函数引用**。后续其他组件对模块级变量的重新赋值不会影响已返回的引用。
-
-```ts
-// 核心逻辑
-if (mount) {
-  // 将模块级方法绑定到当前组件的 setPayload
-  showDialog = (next) => setPayload((prev) => ({ ...prev, ...next, visible: true }));
-  hideDialog = () => setPayload({ visible: false });
-}
-
-return {
-  [`show${name}`]: showDialog,   // mount=true: 自己的方法; mount=false: 最后一个 mount=true 的方法
-  [`hide${name}`]: hideDialog,
-  [name]: mount ? renderDialog(...) : null,  // 仅 mount=true 时渲染
-};
-```
-
-## 注意事项
-
-- **仅应有一个组件传入 `mount=true`**。多个 `mount=true` 实例各自独立控制自己的对话框，同时会在 DOM 中产生多个对话框节点，破坏单例语义。
-- **`mount=true` 的组件卸载后**，模块级 `showDialog` / `hideDialog` 仍持有已卸载组件的 `setPayload`，调用时可能产生 React 警告。建议将 `mount=true` 的组件放在根布局等始终存在的位置。
-- **`setPayload` 不会自动合并**，它等价于 `useState` 的 setter。更新时需手动展开当前 payload：`setPayload({ ...payload, field: newValue })`。
 
 ## 开发
 
@@ -237,7 +120,3 @@ npm run build
 # 类型检查
 npm run typecheck
 ```
-
-## License
-
-MIT
