@@ -25,20 +25,38 @@ npm install generate-single-dialog-hook
 
 ## 快速开始
 
-### 1. 定义对话框 Hook
+推荐的使用模式：**父组件负责挂载 Dialog 并提供 Context，子组件仅调用 `show` 触发显示。** Dialog 渲染函数内部通过 `useContext` 读取父组件提供的数据，实现数据流向清晰、职责分离。
+
+### 1. 定义 Context 与对话框 Hook
 
 ```tsx
+import { createContext, useContext } from 'react';
 import { generateSingleDialogHook } from 'generate-single-dialog-hook';
 import { Modal, Form, Input } from 'antd';
 
+// 定义 Context，用于父组件向 Dialog 传递数据
+interface UserContextType {
+  userId: string;
+  username: string;
+}
+
+const UserContext = createContext<UserContextType>({
+  userId: '',
+  username: '',
+});
+
+// 定义 Payload
 interface Payload {
   visible: boolean;
   onSuccess?: (values: Record<string, any>) => void;
 }
 
-export const useTestModal = generateSingleDialogHook<'TestModal', Payload>(
-  'TestModal',
+// 定义对话框 Hook
+export const useEditUserModal = generateSingleDialogHook<'EditUserModal', Payload>(
+  'EditUserModal',
   ({ payload, setPayload }) => {
+    // ✅ 在 renderDialog 内部通过 useContext 读取父组件 Context 数据
+    const { userId, username } = useContext(UserContext);
     const [form] = Form.useForm();
 
     const handleOk = async () => {
@@ -49,13 +67,16 @@ export const useTestModal = generateSingleDialogHook<'TestModal', Payload>(
 
     return (
       <Modal
-        title="Test Modal"
+        title={`编辑用户 - ${username}`}
         open={payload.visible}
         onOk={handleOk}
         onCancel={() => setPayload({ visible: false })}
       >
         <Form form={form}>
-          <Form.Item label="Name" name="name" rules={[{ required: true }]}>
+          <Form.Item label="用户 ID">
+            <Input disabled value={userId} />
+          </Form.Item>
+          <Form.Item label="姓名" name="name" rules={[{ required: true }]}>
             <Input />
           </Form.Item>
         </Form>
@@ -65,39 +86,54 @@ export const useTestModal = generateSingleDialogHook<'TestModal', Payload>(
 );
 ```
 
-### 2. 在组件中使用
+### 2. 父组件挂载 Dialog 并提供 Context
 
 ```tsx
-function MyPage() {
-  // mount=true 表示此组件作为对话框的宿主
-  const { showTestModal, TestModal } = useTestModal(true);
-
-  const handleClick = () => {
-    showTestModal({
-      onSuccess: (values) => {
-        console.log('表单数据:', values);
-      },
-    });
-  };
+function ParentPage() {
+  // mount=true：父组件作为 Dialog 的宿主，负责渲染
+  const { showEditUserModal, EditUserModal } = useEditUserModal(true);
 
   return (
-    <div>
-      <button onClick={handleClick}>打开对话框</button>
-      {TestModal}
-    </div>
+    // 父组件通过 Context.Provider 注入数据，Dialog 渲染时自动消费
+    <UserContext.Provider value={{ userId: '123', username: 'Alice' }}>
+      <ChildComponent />
+      {EditUserModal}
+    </UserContext.Provider>
   );
 }
 ```
 
-### 3. 在其他组件中触发（无需渲染对话框）
+### 3. 子组件仅调用 show 触发显示
+
+```tsx
+function ChildComponent() {
+  // mount=false：子组件不渲染 Dialog，仅获取 show / hide 方法
+  const { showEditUserModal } = useEditUserModal(false);
+
+  return (
+    <button
+      onClick={() =>
+        showEditUserModal({
+          onSuccess: (values) => {
+            console.log('表单数据:', values);
+          },
+        })
+      }
+    >
+      打开编辑对话框
+    </button>
+  );
+}
+```
+
+### 4. 其他页面也可触发（无 Context 时使用默认值）
 
 ```tsx
 function AnotherPage() {
-  // mount=false（或不传），此组件不渲染对话框，但仍可触发显示
-  const { showTestModal } = useTestModal(false);
+  const { showEditUserModal } = useEditUserModal(false);
 
   return (
-    <button onClick={() => showTestModal({ onSuccess: console.log })}>
+    <button onClick={() => showEditUserModal({ onSuccess: console.log })}>
       从其他页面打开
     </button>
   );
